@@ -49,7 +49,11 @@ int renvoie_message(int client_socket_fd, char *data)
  */
 int recois_envoie_message(int client_socket_fd, char *data)
 {
+  data[strcspn(data, "\n")] = '\0';
   printf("Message reçu: %s\n", data);
+  if (strncmp(data, "calcule :", 9) == 0) {
+    return recois_numeros_calcule(client_socket_fd, data);
+  }
   char code[10];
   if (sscanf(data, "%9s:", code) == 1) // Assurez-vous que le format est correct
   {
@@ -66,6 +70,35 @@ int recois_envoie_message(int client_socket_fd, char *data)
   }
 
   return (EXIT_SUCCESS);
+}
+
+int recois_numeros_calcule(int client_socket_fd, const char *data)
+{
+  char operateur;
+  int premier;
+  int second = 0;
+  int resultat;
+  int nombre = sscanf(data, "calcule : %c %d %d", &operateur, &premier, &second);
+
+  if (nombre < 2 || (nombre == 2 && operateur != '~')) {
+    return renvoie_message(client_socket_fd, "calcule : operation invalide\n");
+  }
+  switch (operateur) {
+  case '+': resultat = premier + second; break;
+  case '-': resultat = premier - second; break;
+  case '*': resultat = premier * second; break;
+  case '/': if (second == 0) return renvoie_message(client_socket_fd, "calcule : division par zero\n"); resultat = premier / second; break;
+  case '%': if (second == 0) return renvoie_message(client_socket_fd, "calcule : modulo par zero\n"); resultat = premier % second; break;
+  case '&': resultat = premier & second; break;
+  case '|': resultat = premier | second; break;
+  case '~': resultat = ~premier; break;
+  default: return renvoie_message(client_socket_fd, "calcule : operateur invalide\n");
+  }
+  {
+    char reponse[128];
+    (void)snprintf(reponse, sizeof reponse, "calcule : %d\n", resultat);
+    return renvoie_message(client_socket_fd, reponse);
+  }
 }
 
 /**
@@ -100,7 +133,7 @@ void gerer_client(int client_socket_fd)
     memset(data, 0, sizeof(data));
 
     // Lecture des données envoyées par le client
-    int data_size = read(client_socket_fd, data, sizeof(data));
+    int data_size = (int)read(client_socket_fd, data, sizeof(data) - 1);
 
     if (data_size <= 0)
     {
@@ -120,6 +153,7 @@ void gerer_client(int client_socket_fd)
       break; // Sortir de la boucle de communication avec ce client
     }
 
+    data[data_size] = '\0';
     recois_envoie_message(client_socket_fd, data);
   }
 }

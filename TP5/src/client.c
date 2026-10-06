@@ -21,46 +21,59 @@
  * @param socketfd Le descripteur de la socket utilisée pour la communication.
  * @return 0 en cas de succès, -1 en cas d'erreur.
  */
-int envoie_recois_message(int socketfd)
+static int envoie_et_affiche_reponse(int socketfd, const char *data)
 {
-  char data[1024];
+  char reponse[1024];
+  ssize_t taille = write(socketfd, data, strlen(data));
 
-  // Réinitialisation de l'ensemble des données
-  memset(data, 0, sizeof(data));
-
-  // Demande à l'utilisateur d'entrer un message
-  char message[1024];
-  printf("Votre message (max 1000 caractères): ");
-  fgets(message, sizeof(message), stdin);
-
-  // Construit le message avec une étiquette "message: "
-  strcpy(data, "message: ");
-  strcat(data, message);
-
-  // Envoie le message au client
-  int write_status = (int)write(socketfd, data, strlen(data));
-  if (write_status < 0)
-  {
-    perror("Erreur d'écriture");
+  if (taille < 0) {
+    perror("Erreur d'ecriture");
     return -1;
   }
-
-  // Réinitialisation de l'ensemble des données
-  memset(data, 0, sizeof(data));
-
-  // Lit les données de la socket
-  int read_status = (int)read(socketfd, data, sizeof(data) - 1);
-  if (read_status < 0)
-  {
+  taille = read(socketfd, reponse, sizeof reponse - 1);
+  if (taille <= 0) {
     perror("Erreur de lecture");
     return -1;
   }
+  reponse[taille] = '\0';
+  printf("Message recu: %s\n", reponse);
+  return 0;
+}
 
-  // Affiche le message reçu du client
-  data[read_status] = '\0';
-  printf("Message reçu: %s\n", data);
+int envoie_operateur_numeros(int socketfd, char operateur, int premier,
+                             int second, int nombre_numeros)
+{
+  char data[1024];
+  int taille = nombre_numeros == 1
+      ? snprintf(data, sizeof data, "calcule : %c %d\n", operateur, premier)
+      : snprintf(data, sizeof data, "calcule : %c %d %d\n",
+                 operateur, premier, second);
 
-  return 0; // Succès
+  if (taille < 0 || (size_t)taille >= sizeof data) return -1;
+  return envoie_et_affiche_reponse(socketfd, data);
+}
+
+int envoie_recois_message(int socketfd)
+{
+  char message[1024];
+  char operateur;
+  int premier;
+  int second;
+
+  printf("Votre message (max 1000 caracteres): ");
+  if (fgets(message, sizeof message, stdin) == NULL) return -1;
+  if (sscanf(message, "calcule : %c %d %d", &operateur, &premier, &second) == 3) {
+    return envoie_operateur_numeros(socketfd, operateur, premier, second, 2);
+  }
+  if (sscanf(message, "calcule : %c %d", &operateur, &premier) == 2) {
+    return envoie_operateur_numeros(socketfd, operateur, premier, 0, 1);
+  }
+  {
+    char data[1024];
+    int taille = snprintf(data, sizeof data, "message: %s", message);
+    if (taille < 0 || (size_t)taille >= sizeof data) return -1;
+    return envoie_et_affiche_reponse(socketfd, data);
+  }
 }
 
 int main()
