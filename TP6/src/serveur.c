@@ -20,24 +20,27 @@ static void gestionnaire_ctrl_c(int signal_recu)
 static int plot(const char *data)
 {
   char copie[4096];
-  char *saveptr;
   char *token;
   int nombre;
   FILE *svg;
 
-  if (sscanf(data, "couleurs: %d", &nombre) != 1 || nombre < 1 || nombre > 30)
+  if (sscanf(data, "{\"code\":\"couleurs\",\"nombre\":%d", &nombre) != 1 ||
+      nombre < 1 || nombre > 30)
     return 1;
   if (strlen(data) >= sizeof copie) return 1;
   strcpy(copie, data);
-  token = strtok_r(copie, ",", &saveptr);
+  token = strchr(copie, '[');
   if (token == NULL) return 1;
   svg = fopen(svg_file_path, "w");
   if (svg == NULL) return 1;
   fprintf(svg, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"400\">\n");
   fprintf(svg, "<rect width=\"100%%\" height=\"100%%\" fill=\"white\"/>\n");
   for (int i = 0; i < nombre; ++i) {
-    token = strtok_r(NULL, ",", &saveptr);
-    if (token == NULL) { fclose(svg); return 1; }
+    token = strchr(token, '#');
+    if (token == NULL || strlen(token) < 7) { fclose(svg); return 1; }
+    char couleur[8];
+    memcpy(couleur, token, 7);
+    couleur[7] = '\0';
     double debut = -90.0 + 360.0 * i / nombre;
     double fin = -90.0 + 360.0 * (i + 1) / nombre;
     double x1 = 200 + 150 * cos(debut * M_PI / 180);
@@ -45,7 +48,8 @@ static int plot(const char *data)
     double x2 = 200 + 150 * cos(fin * M_PI / 180);
     double y2 = 200 + 150 * sin(fin * M_PI / 180);
     fprintf(svg, "<path d=\"M200,200 L%.2f,%.2f A150,150 0 0,1 %.2f,%.2f Z\" fill=\"%s\"/>\n",
-            x1, y1, x2, y2, token);
+            x1, y1, x2, y2, couleur);
+    token = token + 7;
   }
   fputs("</svg>\n", svg);
   fclose(svg);
@@ -54,9 +58,9 @@ static int plot(const char *data)
 
 int recois_envoie_message(int client_fd, char data[1024])
 {
-  if (strncmp(data, "couleurs:", 9) != 0 || plot(data) != 0)
-    return renvoie_message(client_fd, "Erreur: message couleurs invalide\n");
-  return renvoie_message(client_fd, "SVG genere: pie_chart.svg\n");
+  if (strncmp(data, "{\"code\":\"couleurs\"", 18) != 0 || plot(data) != 0)
+    return renvoie_message(client_fd, "{\"code\":\"erreur\",\"message\":\"JSON invalide\"}\n");
+  return renvoie_message(client_fd, "{\"code\":\"ok\",\"fichier\":\"pie_chart.svg\"}\n");
 }
 
 int renvoie_message(int client_fd, char *data)

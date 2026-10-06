@@ -28,22 +28,26 @@ static int envoyer_couleurs(int fd, const char *chemin, int nombre)
   if (cc == NULL) return -1;
   limite = cc->size < nombre ? cc->size : nombre;
   position += (size_t)snprintf(message + position, sizeof message - position,
-                                "couleurs: %d", limite);
+                                "{\"code\":\"couleurs\",\"nombre\":%d,\"valeurs\":[",
+                                limite);
   for (int i = 0; i < limite; ++i) {
     if (cc->compte_bit == BITS24) {
       position += (size_t)snprintf(message + position, sizeof message - position,
-                                   ",#%02x%02x%02x", cc->cc.cc24[i].c.rouge,
+                                   "%s\"#%02x%02x%02x\"", i == 0 ? "" : ",",
+                                   cc->cc.cc24[i].c.rouge,
                                    cc->cc.cc24[i].c.vert, cc->cc.cc24[i].c.bleu);
     } else {
       position += (size_t)snprintf(message + position, sizeof message - position,
-                                   ",#%02x%02x%02x", cc->cc.cc32[i].c.rouge,
-                                   cc->cc.cc32[i].c.vert, cc->cc.cc32[i].c.bleu);
+                                   "%s\"#%02x%02x%02x\"", i == 0 ? "" : ",",
+                                   cc->cc.cc32[i].c.rouge, cc->cc.cc32[i].c.vert,
+                                   cc->cc.cc32[i].c.bleu);
     }
   }
   free(cc->compte_bit == BITS24 ? (void *)cc->cc.cc24 : (void *)cc->cc.cc32);
   free(cc);
   if (position + 2 >= sizeof message) return -1;
-  message[position++] = '\n'; message[position] = '\0';
+  position += (size_t)snprintf(message + position, sizeof message - position,
+                                "]}\n");
   if (envoyer_tout(fd, message) != 0) return -1;
   {
     char reponse[256];
