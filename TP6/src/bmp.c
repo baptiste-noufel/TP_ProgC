@@ -1,108 +1,48 @@
-/*
- * SPDX-FileCopyrightText: 2021 John Samuel
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- *
- */
-
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <unistd.h>
 #include "bmp.h"
 
-/*
- * fonction d'analyse des couleurs dans l'image du format BMP
- * Il faut un argument : le chemin du fichier image
- */
 couleur_compteur *analyse_bmp_image(char *nom_de_fichier)
 {
-
-  couleur_compteur *cc = NULL;
-
-  // l'ouverture du fichier pour la lecture
   int fd = open(nom_de_fichier, O_RDONLY);
-  printf("%s", nom_de_fichier);
-  if (fd < 0)
-  {
-    perror("Erreur: open");
-    return 0;
+  bmp_header header;
+  bmp_info_header info;
+  couleur pixels = {0};
+  couleur_compteur *resultat;
+
+  if (fd < 0) { perror(nom_de_fichier); return NULL; }
+  if (read(fd, &header, sizeof header) != (ssize_t)sizeof header ||
+      header.type != 0x4d42 ||
+      read(fd, &info, sizeof info) != (ssize_t)sizeof info ||
+      (info.compte_bit != 24 && info.compte_bit != 32) ||
+      info.taille_image == 0 ||
+      lseek(fd, header.offset, SEEK_SET) < 0) {
+    fprintf(stderr, "Fichier BMP invalide: %s\n", nom_de_fichier);
+    close(fd);
+    return NULL;
   }
-
-  bmp_header bheader;
-  bmp_info_header binfo_header;
-
-  // la lecture de l'en-tête du fichier pour en connaître la taille et le type
-  ssize_t compte = read(fd, &bheader, sizeof(bheader));
-  if (compte < 0)
-  {
-    perror("Erreur: read");
-    return (NULL);
-  }
-
-  // Vérifier l'en-tête pour voir si le fichier est une image de format BMP
-  if (bheader.type != 0x4D42)
-  {
-    return (NULL);
-  }
-
-  /* Obtenir l'information indiquant si l'image utilise 3 (RGB) ou 4 (RGBA)
-   * octets pour stocker une seule couleur
-   */
-  compte = read(fd, &binfo_header, sizeof(binfo_header));
-  if (compte < 0)
-  {
-    perror("Erreur: read");
-    return (NULL);
-  }
-
-  // Se positionner correctement pour commencer à lire les couleurs
-  off_t offset = lseek(fd, bheader.offset, SEEK_SET);
-  if (offset != bheader.offset)
-  {
-    perror("Erreur: lseek");
-    return (NULL);
-  }
-
-  // Lecture des couleurs de 4 octets
-  if (binfo_header.compte_bit == 32)
-  {
-    couleur32 *c32 = calloc(binfo_header.taille_image / 4, 4);
-    read(fd, c32, binfo_header.taille_image);
-    if (compte < 0)
-    {
-      perror("Erreur: read");
-      return (NULL);
+  if (info.compte_bit == 24) {
+    int n = (int)(info.taille_image / 3);
+    pixels.compte_bit = BITS24;
+    pixels.c.c24 = malloc((size_t)n * sizeof *pixels.c.c24);
+    if (pixels.c.c24 == NULL || read(fd, pixels.c.c24, info.taille_image) != (ssize_t)info.taille_image) {
+      free(pixels.c.c24); close(fd); return NULL;
     }
-
-    couleur c;
-    c.compte_bit = BITS32;
-    c.c.c32 = c32;
-    cc = compte_couleur(&c, binfo_header.taille_image / 4);
-    trier_couleur_compteur(cc);
-  }
-  else if (binfo_header.compte_bit == 24)
-  {
-    // Lecture des couleurs de 3 octets
-    couleur24 *c24 = calloc(binfo_header.taille_image / 3, 3);
-    read(fd, c24, binfo_header.taille_image);
-    if (compte < 0)
-    {
-      perror("Erreur: read");
-      return (NULL);
+    resultat = compte_couleur(&pixels, n);
+    free(pixels.c.c24);
+  } else {
+    int n = (int)(info.taille_image / 4);
+    pixels.compte_bit = BITS32;
+    pixels.c.c32 = malloc((size_t)n * sizeof *pixels.c.c32);
+    if (pixels.c.c32 == NULL || read(fd, pixels.c.c32, info.taille_image) != (ssize_t)info.taille_image) {
+      free(pixels.c.c32); close(fd); return NULL;
     }
-
-    couleur c;
-    c.compte_bit = BITS24;
-    c.c.c24 = c24;
-    cc = compte_couleur(&c, binfo_header.taille_image / 3);
-    trier_couleur_compteur(cc);
+    resultat = compte_couleur(&pixels, n);
+    free(pixels.c.c32);
   }
-
   close(fd);
-
-  return cc;
+  if (resultat != NULL) trier_couleur_compteur(resultat);
+  return resultat;
 }
