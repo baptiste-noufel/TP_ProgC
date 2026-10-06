@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "operator.h"
 #include "fichier.h"
+#include "liste.h"
 
 static int exercice_operateurs(void)
 {
@@ -35,9 +36,7 @@ static int exercice_fichiers(void)
         fprintf(stderr, "Nom invalide.\n");
         return 1;
     }
-    if (choix == 1) {
-        return lire_fichier(nom);
-    }
+    if (choix == 1) return lire_fichier(nom);
     if (choix == 2) {
         printf("Message : ");
         if (scanf(" %1023[^\n]", message) != 1) {
@@ -50,17 +49,41 @@ static int exercice_fichiers(void)
     return 1;
 }
 
+static int exercice_liste(void)
+{
+    const struct couleur couleurs[] = {
+        {0xff, 0x00, 0x00}, {0x00, 0xff, 0x00}, {0x00, 0x00, 0xff},
+        {0xff, 0xff, 0x00}, {0xff, 0x00, 0xff}, {0x00, 0xff, 0xff},
+        {0xff, 0xff, 0xff}, {0x00, 0x00, 0x00}, {0x80, 0x80, 0x80},
+        {0xff, 0x80, 0x00}
+    };
+    struct liste_couleurs liste;
+
+    init_liste(&liste);
+    for (size_t i = 0; i < sizeof couleurs / sizeof couleurs[0]; ++i) {
+        if (insertion(&couleurs[i], &liste) != 0) {
+            fprintf(stderr, "Allocation impossible.\n");
+            liberer_liste(&liste);
+            return 1;
+        }
+    }
+    parcours(&liste);
+    liberer_liste(&liste);
+    return 0;
+}
+
 int main(void)
 {
     int exercice;
 
-    printf("Choisissez l'exercice (1 ou 2) : ");
+    printf("Choisissez l'exercice (1, 2 ou 7) : ");
     if (scanf("%d", &exercice) != 1) {
         fprintf(stderr, "Choix invalide.\n");
         return 1;
     }
     if (exercice == 1) return exercice_operateurs();
     if (exercice == 2) return exercice_fichiers();
+    if (exercice == 7) return exercice_liste();
     fprintf(stderr, "L'exercice choisi n'est pas disponible.\n");
     return 1;
 }
