@@ -40,6 +40,66 @@ static int envoie_et_affiche_reponse(int socketfd, const char *data)
   return 0;
 }
 
+static int envoie_calcul_lit(int socketfd, char operateur, int premier,
+                             int second, int *resultat)
+{
+  char data[128];
+  char reponse[128];
+  int taille = snprintf(data, sizeof data, "calcule : %c %d %d\n",
+                        operateur, premier, second);
+  ssize_t recu;
+
+  if (taille < 0 || (size_t)taille >= sizeof data ||
+      write(socketfd, data, (size_t)taille) < 0) {
+    return -1;
+  }
+  recu = read(socketfd, reponse, sizeof reponse - 1);
+  if (recu <= 0) return -1;
+  reponse[recu] = '\0';
+  if (sscanf(reponse, "calcule : %d", resultat) != 1) return -1;
+  printf("Message recu: %s", reponse);
+  return 0;
+}
+
+static int envoyer_notes(int socketfd)
+{
+  int somme_classe = 0;
+
+  for (int etudiant = 1; etudiant <= 5; ++etudiant) {
+    int notes[5];
+    int somme;
+    for (int note = 0; note < 5; ++note) {
+      char chemin[128];
+      FILE *fichier;
+      (void)snprintf(chemin, sizeof chemin, "../etudiant/%d/note%d.txt",
+                     etudiant, note + 1);
+      fichier = fopen(chemin, "r");
+      if (fichier == NULL || fscanf(fichier, "%d", &notes[note]) != 1) {
+        perror(chemin);
+        if (fichier != NULL) fclose(fichier);
+        return -1;
+      }
+      fclose(fichier);
+    }
+    if (envoie_calcul_lit(socketfd, '+', notes[0], notes[1], &somme) != 0 ||
+        envoie_calcul_lit(socketfd, '+', somme, notes[2], &somme) != 0 ||
+        envoie_calcul_lit(socketfd, '+', somme, notes[3], &somme) != 0 ||
+        envoie_calcul_lit(socketfd, '+', somme, notes[4], &somme) != 0) {
+      return -1;
+    }
+    printf("Somme etudiant %d : %d\n", etudiant, somme);
+    somme_classe += somme;
+  }
+  {
+    int moyenne;
+    if (envoie_calcul_lit(socketfd, '/', somme_classe, 5, &moyenne) != 0) {
+      return -1;
+    }
+    printf("Moyenne de la classe : %d\n", moyenne);
+  }
+  return 0;
+}
+
 int envoie_operateur_numeros(int socketfd, char operateur, int premier,
                              int second, int nombre_numeros)
 {
@@ -62,6 +122,9 @@ int envoie_recois_message(int socketfd)
 
   printf("Votre message (max 1000 caracteres): ");
   if (fgets(message, sizeof message, stdin) == NULL) return -1;
+  if (strncmp(message, "notes", 5) == 0) {
+    return envoyer_notes(socketfd);
+  }
   if (sscanf(message, "calcule : %c %d %d", &operateur, &premier, &second) == 3) {
     return envoie_operateur_numeros(socketfd, operateur, premier, second, 2);
   }
@@ -109,7 +172,9 @@ int main()
   while (1)
   {
     // appeler la fonction pour envoyer un message au serveur
-    envoie_recois_message(socketfd);
+    if (envoie_recois_message(socketfd) != 0) {
+      break;
+    }
   }
 
   close(socketfd);
