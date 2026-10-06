@@ -38,7 +38,7 @@ int envoie_recois_message(int socketfd)
   strcat(data, message);
 
   // Envoie le message au client
-  int write_status = write(socketfd, data, strlen(data));
+  int write_status = (int)write(socketfd, data, strlen(data));
   if (write_status < 0)
   {
     perror("Erreur d'écriture");
@@ -49,7 +49,7 @@ int envoie_recois_message(int socketfd)
   memset(data, 0, sizeof(data));
 
   // Lit les données de la socket
-  int read_status = read(socketfd, data, sizeof(data));
+  int read_status = (int)read(socketfd, data, sizeof(data) - 1);
   if (read_status < 0)
   {
     perror("Erreur de lecture");
@@ -57,6 +57,7 @@ int envoie_recois_message(int socketfd)
   }
 
   // Affiche le message reçu du client
+  data[read_status] = '\0';
   printf("Message reçu: %s\n", data);
 
   return 0; // Succès

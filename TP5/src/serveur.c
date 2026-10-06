@@ -55,7 +55,13 @@ int recois_envoie_message(int client_socket_fd, char *data)
   {
     if (strcmp(code, "message:") == 0)
     {
-      return renvoie_message(client_socket_fd, data);
+      char reponse[1024];
+      printf("Votre réponse (max 1000 caractères): ");
+      if (fgets(reponse, sizeof reponse, stdin) == NULL) {
+        return EXIT_FAILURE;
+      }
+      reponse[strcspn(reponse, "\n")] = '\0';
+      return renvoie_message(client_socket_fd, reponse);
     }
   }
 
