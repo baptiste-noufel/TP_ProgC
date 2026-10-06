@@ -44,7 +44,15 @@ static int envoyer_couleurs(int fd, const char *chemin, int nombre)
   free(cc);
   if (position + 2 >= sizeof message) return -1;
   message[position++] = '\n'; message[position] = '\0';
-  return envoyer_tout(fd, message);
+  if (envoyer_tout(fd, message) != 0) return -1;
+  {
+    char reponse[256];
+    ssize_t taille = recv(fd, reponse, sizeof reponse - 1, 0);
+    if (taille <= 0) return -1;
+    reponse[taille] = '\0';
+    fputs(reponse, stdout);
+  }
+  return 0;
 }
 
 int envoie_recois_message(int socketfd)
